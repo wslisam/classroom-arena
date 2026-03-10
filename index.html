@@ -44,6 +44,7 @@
             font-size: 2rem;
             z-index: 50;
             text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+            will-change: transform, opacity; /* GPU Acceleration */
         }
         .dark .float-anim {
             text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
@@ -76,6 +77,7 @@
             flex-direction: column;
             height: 100%;
             min-height: 250px;
+            will-change: transform, box-shadow; /* GPU Acceleration */
         }
         
         [contenteditable="true"]:hover {
@@ -86,6 +88,9 @@
         [contenteditable="true"]:focus {
             outline: 2px solid #0ea5e9;
             background-color: transparent;
+        }
+        .score-display {
+            transition: transform 0.2s ease, color 0.2s ease;
         }
         .score-display:hover {
             cursor: pointer;
@@ -216,7 +221,7 @@
         .progress-bar-fill {
             height: 100%;
             background-color: #0ea5e9;
-            transition: width 0.1s linear;
+            transition: width 0.1s linear, background-color 0.3s ease;
         }
     </style>
 </head>
@@ -297,7 +302,6 @@
             </div>
 
             <div id="timerDisplayContainer" class="w-full max-w-4xl text-center rounded-2xl p-4 transition-colors duration-300 mt-4">
-                <!-- Added tabular-nums here to prevent width shifting -->
                 <div id="timerDisplay" class="text-7xl md:text-8xl lg:text-9xl leading-none font-mono tabular-nums font-black tracking-tighter mb-4 text-slate-800 dark:text-white drop-shadow-sm flex items-baseline justify-center gap-2">
                     <span id="timerMain">05:00</span><span id="timerMs" class="text-4xl md:text-5xl lg:text-6xl text-slate-500 dark:text-slate-400">.000</span>
                 </div>
@@ -454,7 +458,6 @@
                 speedFast: "Fast",
                 speedSlow: "Slow",
                 showMs: "Show Milliseconds",
-                // Titles (Hover Explanations)
                 titleApp: "Click to edit application name",
                 titleActivity: "Enter the current activity or topic name",
                 titleTimer: "Show/Hide Timer Section",
@@ -510,7 +513,6 @@
                 speedFast: "快",
                 speedSlow: "慢",
                 showMs: "顯示毫秒",
-                // Titles (Hover Explanations)
                 titleApp: "點擊編輯應用程式名稱",
                 titleActivity: "輸入當前活動或課題名稱",
                 titleTimer: "顯示/隱藏計時器區域",
@@ -574,9 +576,13 @@
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         let audioCtx;
 
-        function playDing() {
+        function initAudio() {
             if (!audioCtx) audioCtx = new AudioContext();
             if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playDing() {
+            initAudio();
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             osc.type = 'sine';
@@ -591,8 +597,7 @@
         }
 
         function playAlarm() {
-            if (!audioCtx) audioCtx = new AudioContext();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+            initAudio();
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             osc.type = 'square';
@@ -610,8 +615,7 @@
         }
 
         function playTada() {
-            if (!audioCtx) audioCtx = new AudioContext();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+            initAudio();
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             osc.type = 'triangle';
@@ -628,8 +632,7 @@
         }
 
         function playTick() {
-            if (!audioCtx) audioCtx = new AudioContext();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+            initAudio();
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             osc.type = 'sine';
@@ -653,7 +656,7 @@
                 remainingMs: 300000,
                 isRunning: false,
                 intervalId: null,
-                expectedEndTime: null, // Changed from lastTick to absolute time
+                expectedEndTime: null,
                 isVisible: false,
                 alarmTimeout: null,
                 showMs: true
@@ -696,14 +699,17 @@
             applyTheme();
             applyLanguage();
             updateGroupCountDisplay();
-            renderGroups();
-            updateTimerDisplay();
+            renderGroups(); // Initial full render
+            updateTimerDisplay(true); // Force update
             updateToggleButtons();
             
             if(!state.timer.isVisible) document.getElementById('timerSection').classList.add('hidden');
             else document.getElementById('timerSection').classList.remove('hidden');
             
             if(!state.groupsVisible) document.getElementById('groupsSection').classList.add('hidden');
+            
+            // Initialize AudioContext on first click to bypass browser restrictions
+            document.body.addEventListener('click', initAudio, { once: true });
         }
 
         function saveData() {
@@ -937,7 +943,7 @@
                 state.groupCount = newCount;
                 adjustGroupsArray();
                 updateGroupCountDisplay();
-                renderGroups();
+                renderGroups(); // Count changed, full render needed
                 saveData();
             }
         }
@@ -956,7 +962,9 @@
             
             state.groups[index].score += delta;
             saveData();
-            renderGroups();
+            
+            // OPTIMIZATION: Update UI partially instead of full re-render
+            updateAllGroupsUI();
             
             if (delta > 0) {
                 playDing();
@@ -970,14 +978,13 @@
             const t = translations[state.language];
             const currentScore = state.groups[index].score;
             const newScoreStr = prompt(t.enterScore, currentScore);
-            // Added stricter validation
             if (newScoreStr !== null && newScoreStr.trim() !== "" && !isNaN(Number(newScoreStr))) {
                 if (!state.groups[index].history) state.groups[index].history = [];
                 state.groups[index].history.push(state.groups[index].score);
                 
                 state.groups[index].score = parseInt(newScoreStr, 10);
                 saveData();
-                renderGroups();
+                updateAllGroupsUI();
             }
         }
 
@@ -985,7 +992,7 @@
             if (state.groups[index].history && state.groups[index].history.length > 0) {
                 state.groups[index].score = state.groups[index].history.pop();
                 saveData();
-                renderGroups();
+                updateAllGroupsUI();
             }
         }
 
@@ -995,7 +1002,7 @@
             
             state.groups[index].score = 0;
             saveData();
-            renderGroups();
+            updateAllGroupsUI();
         }
 
         function resetAllScores() {
@@ -1007,7 +1014,7 @@
                     g.score = 0;
                 });
                 saveData();
-                renderGroups();
+                updateAllGroupsUI();
             }
         }
 
@@ -1163,14 +1170,31 @@
             }, 300);
         }
 
-        function renderGroups() {
-            const container = document.getElementById('groupsContainer');
-            container.innerHTML = '';
-            
+        // OPTIMIZATION: Partial DOM updates for scores to avoid reflows
+        function updateAllGroupsUI() {
             const ranks = getRankings();
-            const t = translations[state.language];
-
+            
             state.groups.forEach((group, index) => {
+                const card = document.getElementById(`group-card-${index}`);
+                if (!card) return;
+
+                // Update Score Text
+                const scoreDisplay = document.getElementById(`score-display-${index}`);
+                if (scoreDisplay && scoreDisplay.innerText !== String(group.score)) {
+                    scoreDisplay.innerText = group.score;
+                }
+
+                // Update Undo Button Status
+                const undoBtn = document.getElementById(`undo-btn-${index}`);
+                if (undoBtn) {
+                    const canUndo = group.history && group.history.length > 0;
+                    undoBtn.className = canUndo 
+                        ? "text-slate-400 hover:text-brand-500 transition text-lg" 
+                        : "text-slate-200 dark:text-darkbg-600 cursor-not-allowed transition text-lg";
+                    undoBtn.onclick = canUndo ? () => undoScore(index) : null;
+                }
+
+                // Update Rankings/Crowns
                 let borderClass = 'border-slate-200 dark:border-darkbg-700 shadow-sm';
                 let crownHTML = '';
 
@@ -1184,24 +1208,39 @@
                     borderClass = 'border-orange-400 shadow-[0_0_15px_rgba(251,146,60,0.3)] dark:shadow-[0_0_15px_rgba(251,146,60,0.15)]';
                     crownHTML = `<div class="absolute -top-4 left-1/2 -translate-x-1/2 text-orange-400 text-3xl drop-shadow-md z-10" title="3rd"><i class="fa-solid fa-award"></i></div>`;
                 }
-                
-                const card = document.createElement('div');
+
+                // Apply Border
                 card.className = `group-card relative bg-white dark:bg-darkbg-800 rounded-2xl p-6 flex flex-col items-center justify-between border-2 transform hover:-translate-y-1 hover:shadow-lg transition-all duration-300 ${borderClass}`;
                 
-                const canUndo = group.history && group.history.length > 0;
-                const undoClass = canUndo ? "text-slate-400 hover:text-brand-500" : "text-slate-200 dark:text-darkbg-600 cursor-not-allowed";
+                // Apply Crown
+                const crownContainer = document.getElementById(`crown-container-${index}`);
+                if (crownContainer && crownContainer.innerHTML !== crownHTML) {
+                    crownContainer.innerHTML = crownHTML;
+                }
+            });
+        }
 
+        // Initial Full Render
+        function renderGroups() {
+            const container = document.getElementById('groupsContainer');
+            container.innerHTML = '';
+            const t = translations[state.language];
+
+            state.groups.forEach((group, index) => {
+                const card = document.createElement('div');
+                card.id = `group-card-${index}`;
+                // Classes will be set by updateAllGroupsUI
+                
                 card.innerHTML = `
-                    ${crownHTML}
+                    <div id="crown-container-${index}"></div>
                     
-                    <!-- Group Max Students Setting -->
                     <div class="absolute top-3 left-3 flex items-center gap-1 text-slate-400 hover:text-indigo-500 transition-colors text-sm no-print" data-i18n-title="titleMaxStudents" title="${t.titleMaxStudents}">
                         <i class="fa-solid fa-users"></i>
                         <input type="number" min="1" class="w-10 bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-darkbg-600 focus:border-indigo-500 focus:outline-none text-center font-semibold" value="${group.maxStudents || 4}" onchange="updateGroupMaxStudents(${index}, this.value)">
                     </div>
 
                     <div class="absolute top-3 right-3 flex gap-3 no-print">
-                        <button onclick="${canUndo ? `undoScore(${index})` : ''}" class="${undoClass} transition text-lg" data-i18n-title="titleUndo" title="${t.titleUndo}">
+                        <button id="undo-btn-${index}" class="text-slate-200 dark:text-darkbg-600 cursor-not-allowed transition text-lg" data-i18n-title="titleUndo" title="${t.titleUndo}">
                             <i class="fa-solid fa-rotate-left"></i>
                         </button>
                         <button onclick="resetGroupScore(${index})" class="text-slate-400 hover:text-red-500 transition text-lg" data-i18n-title="titleReset" title="${t.titleReset}">
@@ -1215,7 +1254,7 @@
                             onblur="updateGroupName(${index}, this.innerText)">${group.name}</h3>
                     </div>
                     
-                    <div onclick="setDirectScore(${index})" class="score-display text-7xl font-black text-slate-800 dark:text-white mb-6 tracking-tighter transition-transform flex-1 flex items-center justify-center" data-i18n-title="titleEditScore" title="${t.titleEditScore}">
+                    <div id="score-display-${index}" onclick="setDirectScore(${index})" class="score-display text-7xl font-black text-slate-800 dark:text-white mb-6 tracking-tighter transition-transform flex-1 flex items-center justify-center" data-i18n-title="titleEditScore" title="${t.titleEditScore}">
                         ${group.score}
                     </div>
                     
@@ -1235,6 +1274,8 @@
 
                 container.appendChild(card);
             });
+            
+            updateAllGroupsUI();
         }
 
         function showFloatingAnimation(element, text, colorClass) {
@@ -1252,10 +1293,15 @@
         function toggleMsDisplay(show) {
             state.timer.showMs = show;
             saveData();
-            updateTimerDisplay();
+            updateTimerDisplay(true);
         }
 
-        function updateTimerDisplay() {
+        // OPTIMIZATION: Cache values to prevent unnecessary DOM updates in requestAnimationFrame
+        let lastRenderedMainStr = "";
+        let lastRenderedMsStr = "";
+        let lastRenderedProgress = "";
+
+        function updateTimerDisplay(force = false) {
             const mainDisplay = document.getElementById('timerMain');
             const msDisplay = document.getElementById('timerMs');
             const progressBar = document.getElementById('timerProgressBar');
@@ -1275,26 +1321,36 @@
                 mainStr = `${m}:${s}`;
             }
             
-            mainDisplay.innerText = mainStr;
+            if (force || mainStr !== lastRenderedMainStr) {
+                mainDisplay.innerText = mainStr;
+                lastRenderedMainStr = mainStr;
+            }
             
             if (state.timer.showMs) {
-                msDisplay.style.display = 'inline';
-                msDisplay.innerText = `.${ms.toString().padStart(3, '0')}`;
+                const msStr = `.${ms.toString().padStart(3, '0')}`;
+                if (force || msDisplay.style.display !== 'inline') msDisplay.style.display = 'inline';
+                if (force || msStr !== lastRenderedMsStr) {
+                    msDisplay.innerText = msStr;
+                    lastRenderedMsStr = msStr;
+                }
             } else {
-                msDisplay.style.display = 'none';
+                if (force || msDisplay.style.display !== 'none') msDisplay.style.display = 'none';
             }
 
             // Update Progress Bar
+            let progressWidth = '0%';
+            let progressColor = '#0ea5e9';
             if (state.timer.totalMs > 0) {
                 const percentage = (state.timer.remainingMs / state.timer.totalMs) * 100;
-                progressBar.style.width = `${Math.max(0, Math.min(100, percentage))}%`;
-                
-                // Change color based on remaining time
-                if (percentage < 10) progressBar.style.backgroundColor = '#ef4444'; // Red
-                else if (percentage < 25) progressBar.style.backgroundColor = '#f59e0b'; // Amber
-                else progressBar.style.backgroundColor = '#0ea5e9'; // Default Brand
-            } else {
-                progressBar.style.width = '0%';
+                progressWidth = `${Math.max(0, Math.min(100, percentage))}%`;
+                if (percentage < 10) progressColor = '#ef4444'; // Red
+                else if (percentage < 25) progressColor = '#f59e0b'; // Amber
+            }
+            
+            if (force || progressWidth !== lastRenderedProgress) {
+                progressBar.style.width = progressWidth;
+                progressBar.style.backgroundColor = progressColor;
+                lastRenderedProgress = progressWidth;
             }
         }
 
@@ -1307,7 +1363,7 @@
                 state.timer.expectedEndTime = Date.now() + newTimeMs;
             }
             removeAlarm();
-            updateTimerDisplay();
+            updateTimerDisplay(true);
         }
 
         function promptCustomTimer() {
@@ -1333,7 +1389,7 @@
                         state.timer.expectedEndTime = Date.now() + state.timer.remainingMs;
                     }
                     removeAlarm();
-                    updateTimerDisplay();
+                    updateTimerDisplay(true);
                 }
             }
         }
@@ -1352,7 +1408,6 @@
                 if (state.timer.remainingMs <= 0) return;
                 
                 state.timer.isRunning = true;
-                // Optimization: Use absolute time to prevent lag when tab is in background
                 state.timer.expectedEndTime = Date.now() + state.timer.remainingMs;
                 
                 btn.innerHTML = `<i class="fa-solid fa-pause"></i> <span data-i18n="pause">${t.pause}</span>`;
@@ -1366,7 +1421,7 @@
                     
                     if (state.timer.remainingMs <= 0) {
                         state.timer.remainingMs = 0;
-                        updateTimerDisplay();
+                        updateTimerDisplay(true);
                         state.timer.isRunning = false;
                         btn.innerHTML = `<i class="fa-solid fa-play"></i> <span data-i18n="start">${t.start}</span>`;
                         btn.className = 'w-36 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0';
@@ -1386,7 +1441,7 @@
             if (state.timer.isRunning) toggleTimer();
             state.timer.remainingMs = state.timer.totalMs;
             removeAlarm();
-            updateTimerDisplay();
+            updateTimerDisplay(true);
         }
 
         function triggerAlarm() {
