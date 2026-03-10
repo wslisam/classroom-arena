@@ -200,6 +200,24 @@
         }
         .slider-text-en { z-index: 1; }
         .slider-text-zh { z-index: 1; }
+        
+        /* Progress Bar */
+        .progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background-color: #e2e8f0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+        .dark .progress-bar-container {
+            background-color: #334155;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #0ea5e9;
+            transition: width 0.1s linear;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 dark:bg-darkbg-900 dark:text-slate-200 min-h-screen flex flex-col transition-colors duration-300">
@@ -280,8 +298,13 @@
 
             <div id="timerDisplayContainer" class="w-full max-w-4xl text-center rounded-2xl p-4 transition-colors duration-300 mt-4">
                 <!-- Added tabular-nums here to prevent width shifting -->
-                <div id="timerDisplay" class="text-7xl md:text-8xl lg:text-9xl leading-none font-mono tabular-nums font-black tracking-tighter mb-6 text-slate-800 dark:text-white drop-shadow-sm flex items-baseline justify-center gap-2">
+                <div id="timerDisplay" class="text-7xl md:text-8xl lg:text-9xl leading-none font-mono tabular-nums font-black tracking-tighter mb-4 text-slate-800 dark:text-white drop-shadow-sm flex items-baseline justify-center gap-2">
                     <span id="timerMain">05:00</span><span id="timerMs" class="text-4xl md:text-5xl lg:text-6xl text-slate-500 dark:text-slate-400">.000</span>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="progress-bar-container">
+                    <div id="timerProgressBar" class="progress-bar-fill" style="width: 100%;"></div>
                 </div>
                 
                 <div class="flex flex-wrap justify-center gap-2 mb-6">
@@ -630,8 +653,8 @@
                 remainingMs: 300000,
                 isRunning: false,
                 intervalId: null,
-                lastTick: null,
-                isVisible: false, // Default hidden
+                expectedEndTime: null, // Changed from lastTick to absolute time
+                isVisible: false,
                 alarmTimeout: null,
                 showMs: true
             },
@@ -639,7 +662,7 @@
             theme: 'light',
             language: 'zh',
             lastPickedGroupIndex: -1,
-            pickerSpeed: 2 // 1: Fast, 2: Slow
+            pickerSpeed: 2
         };
 
         // --- 4. INITIALIZATION ---
@@ -947,7 +970,8 @@
             const t = translations[state.language];
             const currentScore = state.groups[index].score;
             const newScoreStr = prompt(t.enterScore, currentScore);
-            if (newScoreStr !== null && newScoreStr.trim() !== "" && !isNaN(newScoreStr)) {
+            // Added stricter validation
+            if (newScoreStr !== null && newScoreStr.trim() !== "" && !isNaN(Number(newScoreStr))) {
                 if (!state.groups[index].history) state.groups[index].history = [];
                 state.groups[index].history.push(state.groups[index].score);
                 
@@ -1088,7 +1112,6 @@
                     const max = state.groups[randomGroupIdx].maxStudents || 4;
                     const randomStudentNum = Math.floor(Math.random() * max) + 1;
                     
-                    // Modified this part to fix the line break issue in Chinese
                     const winnerName = state.language === 'zh' ? 
                         `${state.groups[randomGroupIdx].name} - \n ${randomStudentNum} 號學生` : 
                         `${state.groups[randomGroupIdx].name} - \n Student ${randomStudentNum}`;
@@ -1163,7 +1186,6 @@
                 }
                 
                 const card = document.createElement('div');
-                // Added hover:-translate-y-1 hover:shadow-lg transition-all duration-300
                 card.className = `group-card relative bg-white dark:bg-darkbg-800 rounded-2xl p-6 flex flex-col items-center justify-between border-2 transform hover:-translate-y-1 hover:shadow-lg transition-all duration-300 ${borderClass}`;
                 
                 const canUndo = group.history && group.history.length > 0;
@@ -1236,6 +1258,7 @@
         function updateTimerDisplay() {
             const mainDisplay = document.getElementById('timerMain');
             const msDisplay = document.getElementById('timerMs');
+            const progressBar = document.getElementById('timerProgressBar');
             
             const totalSeconds = Math.floor(state.timer.remainingMs / 1000);
             const ms = Math.floor(state.timer.remainingMs % 1000); 
@@ -1260,6 +1283,19 @@
             } else {
                 msDisplay.style.display = 'none';
             }
+
+            // Update Progress Bar
+            if (state.timer.totalMs > 0) {
+                const percentage = (state.timer.remainingMs / state.timer.totalMs) * 100;
+                progressBar.style.width = `${Math.max(0, Math.min(100, percentage))}%`;
+                
+                // Change color based on remaining time
+                if (percentage < 10) progressBar.style.backgroundColor = '#ef4444'; // Red
+                else if (percentage < 25) progressBar.style.backgroundColor = '#f59e0b'; // Amber
+                else progressBar.style.backgroundColor = '#0ea5e9'; // Default Brand
+            } else {
+                progressBar.style.width = '0%';
+            }
         }
 
         function adjustTimer(secondsToAdd) {
@@ -1267,6 +1303,9 @@
             if(newTimeMs < 0) newTimeMs = 0;
             state.timer.remainingMs = newTimeMs;
             state.timer.totalMs = newTimeMs;
+            if (state.timer.isRunning) {
+                state.timer.expectedEndTime = Date.now() + newTimeMs;
+            }
             removeAlarm();
             updateTimerDisplay();
         }
@@ -1290,7 +1329,9 @@
                 if (seconds > 0) {
                     state.timer.remainingMs = seconds * 1000;
                     state.timer.totalMs = state.timer.remainingMs;
-                    if (state.timer.isRunning) toggleTimer(); 
+                    if (state.timer.isRunning) {
+                        state.timer.expectedEndTime = Date.now() + state.timer.remainingMs;
+                    }
                     removeAlarm();
                     updateTimerDisplay();
                 }
@@ -1311,16 +1352,17 @@
                 if (state.timer.remainingMs <= 0) return;
                 
                 state.timer.isRunning = true;
-                state.timer.lastTick = performance.now();
+                // Optimization: Use absolute time to prevent lag when tab is in background
+                state.timer.expectedEndTime = Date.now() + state.timer.remainingMs;
+                
                 btn.innerHTML = `<i class="fa-solid fa-pause"></i> <span data-i18n="pause">${t.pause}</span>`;
                 btn.className = 'w-36 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0';
                 
-                const tick = (now) => {
+                const tick = () => {
                     if (!state.timer.isRunning) return;
                     
-                    const delta = now - state.timer.lastTick;
-                    state.timer.lastTick = now;
-                    state.timer.remainingMs -= delta;
+                    const now = Date.now();
+                    state.timer.remainingMs = state.timer.expectedEndTime - now;
                     
                     if (state.timer.remainingMs <= 0) {
                         state.timer.remainingMs = 0;
