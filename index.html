@@ -126,6 +126,7 @@
                 break-inside: avoid;
                 min-height: auto !important;
                 padding: 0.5rem !important;
+                transform: none !important;
             }
             .group-card h3 { font-size: 1.25rem !important; margin-bottom: 0.25rem !important; margin-top: 0.5rem !important; }
             .score-display { font-size: 3rem !important; margin-bottom: 0.5rem !important; }
@@ -208,10 +209,9 @@
         <div id="printActivityName" class="text-lg font-normal mt-1 text-slate-600"></div>
     </div>
 
-    <!-- Header (Grid layout for perfect centering) -->
+    <!-- Header -->
     <header class="bg-white dark:bg-darkbg-800 shadow-md p-4 grid grid-cols-1 md:grid-cols-3 items-center gap-4 no-print sticky top-0 z-40">
-        
-        <!-- Left: App Title (Editable) -->
+        <!-- Left: App Title -->
         <div class="flex justify-center md:justify-start">
             <h1 class="text-2xl md:text-3xl font-extrabold text-brand-600 dark:text-brand-500 flex items-center tracking-tight" data-i18n-title="titleApp" title="Click to edit application name">
                 <i class="fa-solid fa-chalkboard-user mr-3"></i>
@@ -268,10 +268,9 @@
 
     <main class="flex-1 p-4 md:p-8 flex flex-col gap-6 max-w-[1600px] mx-auto w-full h-full">
         
-        <!-- Timer Section (Default Hidden) -->
+        <!-- Timer Section -->
         <section id="timerSection" class="hidden bg-white dark:bg-darkbg-800 rounded-3xl shadow-xl p-6 md:p-8 flex flex-col items-center justify-center relative overflow-hidden no-print border border-slate-100 dark:border-darkbg-700 w-full mx-auto transition-all duration-300">
             
-            <!-- Timer Settings -->
             <div class="absolute top-4 right-4 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                 <label for="showMsToggle" class="cursor-pointer flex items-center gap-2 hover:text-slate-800 dark:hover:text-slate-200 transition">
                     <input type="checkbox" id="showMsToggle" class="rounded text-brand-500 focus:ring-brand-500" onchange="toggleMsDisplay(this.checked)" checked>
@@ -280,7 +279,8 @@
             </div>
 
             <div id="timerDisplayContainer" class="w-full max-w-4xl text-center rounded-2xl p-4 transition-colors duration-300 mt-4">
-                <div id="timerDisplay" class="text-7xl md:text-8xl lg:text-9xl leading-none font-mono font-black tracking-tighter mb-6 text-slate-800 dark:text-white drop-shadow-sm flex items-baseline justify-center gap-2">
+                <!-- Added tabular-nums here to prevent width shifting -->
+                <div id="timerDisplay" class="text-7xl md:text-8xl lg:text-9xl leading-none font-mono tabular-nums font-black tracking-tighter mb-6 text-slate-800 dark:text-white drop-shadow-sm flex items-baseline justify-center gap-2">
                     <span id="timerMain">05:00</span><span id="timerMs" class="text-4xl md:text-5xl lg:text-6xl text-slate-500 dark:text-slate-400">.000</span>
                 </div>
                 
@@ -294,10 +294,10 @@
                 </div>
 
                 <div class="flex flex-wrap justify-center gap-4">
-                    <button id="startBtn" onclick="toggleTimer()" class="w-36 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1">
+                    <button id="startBtn" onclick="toggleTimer()" class="w-36 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0">
                         <i class="fa-solid fa-play"></i> <span data-i18n="start">Start</span>
                     </button>
-                    <button onclick="resetTimer()" class="w-28 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-darkbg-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white rounded-xl font-bold text-lg shadow-md transition flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-600">
+                    <button onclick="resetTimer()" class="w-28 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-darkbg-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white rounded-xl font-bold text-lg shadow-md transition flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-600 active:scale-95">
                         <i class="fa-solid fa-rotate-left"></i> <span data-i18n="reset">Reset</span>
                     </button>
                 </div>
@@ -1163,7 +1163,8 @@
                 }
                 
                 const card = document.createElement('div');
-                card.className = `group-card relative bg-white dark:bg-darkbg-800 rounded-2xl p-6 flex flex-col items-center justify-between border-2 ${borderClass}`;
+                // Added hover:-translate-y-1 hover:shadow-lg transition-all duration-300
+                card.className = `group-card relative bg-white dark:bg-darkbg-800 rounded-2xl p-6 flex flex-col items-center justify-between border-2 transform hover:-translate-y-1 hover:shadow-lg transition-all duration-300 ${borderClass}`;
                 
                 const canUndo = group.history && group.history.length > 0;
                 const undoClass = canUndo ? "text-slate-400 hover:text-brand-500" : "text-slate-200 dark:text-darkbg-600 cursor-not-allowed";
@@ -1197,8 +1198,8 @@
                     </div>
                     
                     <div class="w-full flex justify-between gap-3 no-print mt-auto">
-                        <button onclick="updateScore(${index}, -1, this)" class="flex-1 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/60 dark:text-red-400 py-3 rounded-xl font-bold text-xl transition border border-red-100 dark:border-red-900/50" data-i18n-title="titleMinus" title="${t.titleMinus}">-1</button>
-                        <button onclick="updateScore(${index}, 1, this)" class="flex-1 bg-green-50 hover:bg-green-100 text-green-600 dark:bg-green-900/30 dark:hover:bg-green-900/60 dark:text-green-400 py-3 rounded-xl font-bold text-xl transition border border-green-100 dark:border-green-900/50" data-i18n-title="titlePlus" title="${t.titlePlus}">+1</button>
+                        <button onclick="updateScore(${index}, -1, this)" class="flex-1 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/60 dark:text-red-400 py-3 rounded-xl font-bold text-xl transition border border-red-100 dark:border-red-900/50 active:scale-95" data-i18n-title="titleMinus" title="${t.titleMinus}">-1</button>
+                        <button onclick="updateScore(${index}, 1, this)" class="flex-1 bg-green-50 hover:bg-green-100 text-green-600 dark:bg-green-900/30 dark:hover:bg-green-900/60 dark:text-green-400 py-3 rounded-xl font-bold text-xl transition border border-green-100 dark:border-green-900/50 active:scale-95" data-i18n-title="titlePlus" title="${t.titlePlus}">+1</button>
                     </div>
                 `;
                 
@@ -1305,14 +1306,14 @@
                 cancelAnimationFrame(state.timer.intervalId);
                 state.timer.isRunning = false;
                 btn.innerHTML = `<i class="fa-solid fa-play"></i> <span data-i18n="start">${t.start}</span>`;
-                btn.className = 'w-36 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1';
+                btn.className = 'w-36 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0';
             } else {
                 if (state.timer.remainingMs <= 0) return;
                 
                 state.timer.isRunning = true;
                 state.timer.lastTick = performance.now();
                 btn.innerHTML = `<i class="fa-solid fa-pause"></i> <span data-i18n="pause">${t.pause}</span>`;
-                btn.className = 'w-36 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1';
+                btn.className = 'w-36 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0';
                 
                 const tick = (now) => {
                     if (!state.timer.isRunning) return;
@@ -1326,7 +1327,7 @@
                         updateTimerDisplay();
                         state.timer.isRunning = false;
                         btn.innerHTML = `<i class="fa-solid fa-play"></i> <span data-i18n="start">${t.start}</span>`;
-                        btn.className = 'w-36 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1';
+                        btn.className = 'w-36 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0';
                         triggerAlarm();
                         return;
                     }
