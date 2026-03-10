@@ -816,10 +816,13 @@
             applyLanguage(); 
         }
 
+        let activityTitleTimeout;
         function updateActivityTitle(val) {
             state.activityTitle = val;
             document.getElementById('printActivityName').innerText = val;
-            saveData();
+            // Debounce the save operation to prevent excessive localStorage writes
+            clearTimeout(activityTitleTimeout);
+            activityTitleTimeout = setTimeout(saveData, 500);
         }
 
         function updateSpeed(val) {
@@ -1283,8 +1286,9 @@
             const animEl = document.createElement('div');
             animEl.innerText = text;
             animEl.className = `float-anim ${colorClass}`;
-            animEl.style.left = `${rect.left + rect.width / 2 - 15}px`;
-            animEl.style.top = `${rect.top - 30}px`;
+            // Add window scroll offsets to fix positioning when scrolled down
+            animEl.style.left = `${rect.left + window.scrollX + rect.width / 2 - 15}px`;
+            animEl.style.top = `${rect.top + window.scrollY - 30}px`;
             document.body.appendChild(animEl);
             setTimeout(() => animEl.remove(), 1000);
         }
