@@ -91,6 +91,7 @@
         }
         .score-display {
             transition: transform 0.2s ease, color 0.2s ease;
+            will-change: transform;
         }
         .score-display:hover {
             cursor: pointer;
@@ -222,6 +223,7 @@
             height: 100%;
             background-color: #0ea5e9;
             transition: width 0.1s linear, background-color 0.3s ease;
+            will-change: width, background-color;
         }
     </style>
 </head>
@@ -249,8 +251,7 @@
                    data-i18n-placeholder="activityPlaceholder" 
                    data-i18n-title="titleActivity"
                    title="Enter the current activity or topic name"
-                   oninput="resizeInput(this); updateActivityTitle(this.value)" 
-                   onchange="updateActivityTitle(this.value)">
+                   oninput="resizeInput(this); debouncedUpdateActivityTitle(this.value)">
         </div>
 
         <!-- Right: Controls -->
@@ -538,6 +539,19 @@
             }
         };
 
+        // --- Utility: Debounce ---
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
         // --- 1. SAFE STORAGE WRAPPER ---
         const SafeStorage = (function() {
             let memoryStorage = {};
@@ -816,14 +830,11 @@
             applyLanguage(); 
         }
 
-        let activityTitleTimeout;
-        function updateActivityTitle(val) {
+        const debouncedUpdateActivityTitle = debounce((val) => {
             state.activityTitle = val;
             document.getElementById('printActivityName').innerText = val;
-            // Debounce the save operation to prevent excessive localStorage writes
-            clearTimeout(activityTitleTimeout);
-            activityTitleTimeout = setTimeout(saveData, 500);
-        }
+            saveData();
+        }, 500);
 
         function updateSpeed(val) {
             state.pickerSpeed = parseInt(val);
@@ -966,7 +977,6 @@
             state.groups[index].score += delta;
             saveData();
             
-            // OPTIMIZATION: Update UI partially instead of full re-render
             updateAllGroupsUI();
             
             if (delta > 0) {
@@ -1191,10 +1201,13 @@
                 const undoBtn = document.getElementById(`undo-btn-${index}`);
                 if (undoBtn) {
                     const canUndo = group.history && group.history.length > 0;
-                    undoBtn.className = canUndo 
+                    const expectedClass = canUndo 
                         ? "text-slate-400 hover:text-brand-500 transition text-lg" 
                         : "text-slate-200 dark:text-darkbg-600 cursor-not-allowed transition text-lg";
-                    undoBtn.onclick = canUndo ? () => undoScore(index) : null;
+                    if (undoBtn.className !== expectedClass) {
+                        undoBtn.className = expectedClass;
+                        undoBtn.onclick = canUndo ? () => undoScore(index) : null;
+                    }
                 }
 
                 // Update Rankings/Crowns
@@ -1213,7 +1226,10 @@
                 }
 
                 // Apply Border
-                card.className = `group-card relative bg-white dark:bg-darkbg-800 rounded-2xl p-6 flex flex-col items-center justify-between border-2 transform hover:-translate-y-1 hover:shadow-lg transition-all duration-300 ${borderClass}`;
+                const expectedCardClass = `group-card relative bg-white dark:bg-darkbg-800 rounded-2xl p-6 flex flex-col items-center justify-between border-2 transform hover:-translate-y-1 hover:shadow-lg transition-all duration-300 ${borderClass}`;
+                if (card.className !== expectedCardClass) {
+                    card.className = expectedCardClass;
+                }
                 
                 // Apply Crown
                 const crownContainer = document.getElementById(`crown-container-${index}`);
@@ -1286,7 +1302,6 @@
             const animEl = document.createElement('div');
             animEl.innerText = text;
             animEl.className = `float-anim ${colorClass}`;
-            // Add window scroll offsets to fix positioning when scrolled down
             animEl.style.left = `${rect.left + window.scrollX + rect.width / 2 - 15}px`;
             animEl.style.top = `${rect.top + window.scrollY - 30}px`;
             document.body.appendChild(animEl);
@@ -1297,10 +1312,16 @@
         function toggleMsDisplay(show) {
             state.timer.showMs = show;
             saveData();
-            updateTimerDisplay(true);
+            
+            // If timer is running, we need to switch the interval method
+            if (state.timer.isRunning) {
+                stopTimerLoop();
+                startTimerLoop();
+            } else {
+                updateTimerDisplay(true);
+            }
         }
 
-        // OPTIMIZATION: Cache values to prevent unnecessary DOM updates in requestAnimationFrame
         let lastRenderedMainStr = "";
         let lastRenderedMsStr = "";
         let lastRenderedProgress = "";
@@ -1398,13 +1419,60 @@
             }
         }
 
+        function stopTimerLoop() {
+            if (state.timer.intervalId) {
+                if (state.timer.showMs) {
+                    cancelAnimationFrame(state.timer.intervalId);
+                } else {
+                    clearInterval(state.timer.intervalId);
+                }
+                state.timer.intervalId = null;
+            }
+        }
+
+        function startTimerLoop() {
+            const btn = document.getElementById('startBtn');
+            const t = translations[state.language];
+            
+            const tick = () => {
+                if (!state.timer.isRunning) return;
+                
+                const now = Date.now();
+                state.timer.remainingMs = state.timer.expectedEndTime - now;
+                
+                if (state.timer.remainingMs <= 0) {
+                    state.timer.remainingMs = 0;
+                    updateTimerDisplay(true);
+                    state.timer.isRunning = false;
+                    stopTimerLoop();
+                    btn.innerHTML = `<i class="fa-solid fa-play"></i> <span data-i18n="start">${t.start}</span>`;
+                    btn.className = 'w-36 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0';
+                    triggerAlarm();
+                    return;
+                }
+                
+                updateTimerDisplay();
+                
+                if (state.timer.showMs) {
+                    state.timer.intervalId = requestAnimationFrame(tick);
+                }
+            };
+
+            if (state.timer.showMs) {
+                state.timer.intervalId = requestAnimationFrame(tick);
+            } else {
+                // If not showing MS, run the tick every 100ms instead of every frame to save CPU
+                state.timer.intervalId = setInterval(tick, 100);
+            }
+        }
+
         function toggleTimer() {
             const btn = document.getElementById('startBtn');
             const t = translations[state.language];
             removeAlarm();
 
             if (state.timer.isRunning) {
-                cancelAnimationFrame(state.timer.intervalId);
+                stopTimerLoop();
                 state.timer.isRunning = false;
                 btn.innerHTML = `<i class="fa-solid fa-play"></i> <span data-i18n="start">${t.start}</span>`;
                 btn.className = 'w-36 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0';
@@ -1417,27 +1485,7 @@
                 btn.innerHTML = `<i class="fa-solid fa-pause"></i> <span data-i18n="pause">${t.pause}</span>`;
                 btn.className = 'w-36 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0';
                 
-                const tick = () => {
-                    if (!state.timer.isRunning) return;
-                    
-                    const now = Date.now();
-                    state.timer.remainingMs = state.timer.expectedEndTime - now;
-                    
-                    if (state.timer.remainingMs <= 0) {
-                        state.timer.remainingMs = 0;
-                        updateTimerDisplay(true);
-                        state.timer.isRunning = false;
-                        btn.innerHTML = `<i class="fa-solid fa-play"></i> <span data-i18n="start">${t.start}</span>`;
-                        btn.className = 'w-36 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1 active:translate-y-0';
-                        triggerAlarm();
-                        return;
-                    }
-                    
-                    updateTimerDisplay();
-                    state.timer.intervalId = requestAnimationFrame(tick);
-                };
-                
-                state.timer.intervalId = requestAnimationFrame(tick);
+                startTimerLoop();
             }
         }
 
