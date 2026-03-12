@@ -1,9 +1,11 @@
 # classroom-arena
 Aimed at reducing teachers’ burden of class management, and to boost student engagement and enliven the classroom atmosphere.
 
-Teachers are welcome to try it and share with colleagues who need it. 
+Teachers are welcome to try it and share with colleagues who need it.  https://classroom-arena-wslisam.pages.dev/
 
 Free | Ad-free | No installation | No login | Supports bilingual Chinese/English | Supports dark and light modes
+
+<img width="1701" height="975" alt="image" src="https://github.com/user-attachments/assets/2748ce63-0e1f-4ddc-ba31-c84e2af72a0b" />
 
 🎯 Core features:
 • Group scoring board: supports “undo actions,” “score reset,” and “auto-flag top three groups.”
